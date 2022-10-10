@@ -1,8 +1,6 @@
 #여기는 개별 swapContract들의 무이표 할인금리,
 import pandas as pd
-import numpy as np
 from getWorkingDate import getWorkingDate
-from fromExcel import fromExcel
 from getNPV import getNPVforMaturity
 from dateutil.relativedelta import relativedelta
 
