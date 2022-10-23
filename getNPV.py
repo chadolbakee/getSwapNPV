@@ -120,7 +120,8 @@ class getNPVforMaturity():
             numOfDays[0] = (dateList[0]-self.get_effectiveDate(self.contractDate)).days
 
         elif flag == 0:
-            numOfDays[0] = (dateList[0] - self.get_effectiveDate(self.npvDate)).days
+            numOfDays[0] = (dateList[0] - self.get_effectiveDate(self.npvDate)).days #으아 모르겠당
+
 
         for i in range(1, len(dateList), 1):
             #numOfDays[i-1]=dateList[i]-dateList[i-1]
