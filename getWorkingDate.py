@@ -13,7 +13,7 @@ class getWorkingDate():
 
         #six_months = pd.to_datetime(start_date) + relativedelta(months=+3)
         getSwapRate = fromExcel()
-        self.swapRate = getSwapRate.getSwapRate()
+        self.swapRate = getSwapRate.getSwapRate() #★fromExcel에서 가져옴.
 
 
     def get_effectiveDate(self,date): #이것도 실제 계약 결제일과, 구하고자 하는 npv 기준일의 금리가 다르다

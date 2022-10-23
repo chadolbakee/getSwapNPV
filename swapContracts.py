@@ -3,16 +3,19 @@ import pandas as pd
 from getWorkingDate import getWorkingDate
 from getNPV import getNPVforMaturity
 from dateutil.relativedelta import relativedelta
+#결국 여기서 계약정보들이 다 있으니까, 여기서 모두 만들기!!
+#Contract 정보가 필요한 것 -> 고정금리, cd 금리
+#
 
 class swapContracts:
 
-    def __init__(self, startDate, npvDate, tenorContract, notionalAmount, swapRate, direction):
+    def __init__(self, contractStartDate, npvDate, tenorContract, notionalAmount, fixedSwapRate, direction):
 
-        self.startDate=pd.to_datetime(startDate)
+        self.contractStartDate=pd.to_datetime(contractStartDate)
         self.npvDate=pd.to_datetime(npvDate)
         self.tenorContract=tenorContract
         self.notionalAmount=notionalAmount
-        self.swapRate=swapRate
+        self.swapRate=fixedSwapRate
         self.direction=direction #long인경우 1, short인 경우 -1
 
         self.getcfdate = getWorkingDate(self.npvDate)
@@ -22,7 +25,7 @@ class swapContracts:
         self.swapDF = pd.DataFrame()  # 빈 데이터프레임 선언한 뒤
 
 
-        self.swapDF=pd.concat([self.swapDF,self.getnpvMaturity.getSwapRateByInterpolation()],axis=1)
+        self.swapDF = pd.concat([self.swapDF,self.getnpvMaturity.getSwapRateByInterpolation()],axis=1)
 
         print(self.swapDF) #이 클래스에서는 이제 이거만 가지고 요리하면 된다
 
@@ -30,7 +33,7 @@ class swapContracts:
     def get_CFdaysForEachContract(self): #이거 날짜 구하면서 days도 같이 구하자
 
         #effectiveDate=self.get_effectiveDate(date)
-        effectiveDate = self.getcfdate.get_effectiveDate(self.startDate)
+        effectiveDate = self.getcfdate.get_effectiveDate(self.contractStartDate)
         numOfCF= self.tenorContract * 4 #총 CF가 발생하는 횟수
         listOfCF=list()
         numOfDaysBetween=[0 for i in range(self.tenorContract * 4)] #중간중간 날짜 구해주기
@@ -38,7 +41,7 @@ class swapContracts:
 
 
         for i in range(numOfCF):
-            temp_date=effectiveDate+relativedelta(months=3)*(i+1) #우선 3개월 더한걸로 구해주고
+            temp_date = effectiveDate+relativedelta(months=3)*(i+1) #우선 3개월 더한걸로 구해주고
             #공휴일인지 먼저 체크하기
             if (self.getcfdate.checkWeekend(temp_date)):
                 listOfCF.append(self.getcfdate.getWeekendPlus(temp_date))
@@ -91,5 +94,7 @@ class swapContracts:
         # self.swapDF = pd.concat([self.swapDF, fixedCF], axis=1)
         fixedCF=pd.Series(fixedCF,name='고정금리CF')
 
-        return fixedCF
+        return fixedCF #왠만하면 시리즈로 반환해서 함수에서 합치기
+
+
 
