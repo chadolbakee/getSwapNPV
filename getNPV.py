@@ -18,6 +18,7 @@ class getNPVforMaturity():
         self.contractNotional = contractInfo['notional']
         self.contractTenor = contractInfo['tenor']
         self.contractSwapRate = contractInfo['swapRate']
+        self.direction = contractInfo['direction']
 
         # ★ contractTenor 구할때 remainingTenor 도 구해주는게 좋을 듯 하다!!
 
@@ -28,6 +29,7 @@ class getNPVforMaturity():
         getSwapRate=fromExcel()
         self.swapRateForTenor = getSwapRate.getSwapRate()
         self.CDrate = getSwapRate.getCdRate()
+        self.holidayList = getSwapRate.getHolidayList()
 
 #  ★ 날짜 구하는데 필요한 함수들
 
@@ -80,7 +82,10 @@ class getNPVforMaturity():
 
         for i in range(numOfCF):
             temp_date = effectiveDate + relativedelta(months=3) * (i + 1)  # 우선 3개월 더한걸로 구해주고
-            # 공휴일인지 먼저 체크하기
+
+            temp_date = self.checkHolidays(temp_date)
+            # 공휴일 먼저 확인하고
+
             if (self.check_weekend(temp_date)):
                 #listOfCF.append(self.getWeekendPlus(temp_date))
                 listOfCF.append(self.getWeekendPlus(temp_date))
@@ -104,8 +109,29 @@ class getNPVforMaturity():
         else :
             CDFixingDate = effectiveDate
 
-        print(CDFixingDate)
         return listOfCF
+
+    def checkHolidays(self, date):
+
+        date = pd.to_datetime(date)
+
+        holidayList = self.holidayList
+        holidayList = pd.to_datetime(holidayList)
+        i = 0
+        if date in holidayList:
+            holidaySkip = date
+            while holidaySkip in holidayList:
+                holidaySkip = holidaySkip + relativedelta(days=1)
+                i = i+1
+
+                if holidaySkip.month != date.month:
+                    holidaySkip = date - relativedelta(days=i)
+                    break
+            return holidaySkip
+
+        else:
+            return date
+
 
     def getNumOfDAYSbetween(self, dateList,flag):
         #  날짜 수 구하는 함수 (ex 91/365, 92/365, 90/365 이런거 구할 때
@@ -246,33 +272,6 @@ class getNPVforMaturity():
 
         return discountList
 
-    # def getDiscountByMaturity(self): #getSwapRateByInterpolation 끝나고 하기
-    #
-    #     self.swapDF=self.getSwapRateByInterpolation() #위에서 스왑금리 보간한거 들고오기
-    #     discountList=[0 for i in range(self.tenor*4)] #할인계수 list 추가
-    #
-    #     discountList=pd.Series(discountList,name='할인계수')
-    #
-    #     numOfDays = self.swapDF['기간'].dt.days.values.tolist()  #loc로 바로 쓰려고 했는데 안되는듯
-    #     swapRate=self.swapDF['스왑금리'].values.tolist()
-    #
-    #     print(swapRate)
-    #
-    #
-    #     for i in self.swapDF.index:
-    #         if i==0:
-    #             discountList[i]=1/(1+(swapRate[i]/100*numOfDays[i]/365))
-    #         else:
-    #             discountList[i] = (1 - ((swapRate[i])/365 * sum(numOfDays[0:i-1]))*sum(discountList[0:i-1]))/(1+ (swapRate[i]/100)*numOfDays[i]/365)
-    #
-    #     # for i in self.swapDF.index:
-    #     #     if i==0:
-    #     #         discountList[i]=(1/((1+self.swapDF.loc[i,'스왑금리']/100)*(numOfDays[i]/365)))
-    #     #     else:
-    #     #         # discountList[i]=(1-(self.swapDF.loc[i,'스왑금리'])/100*sum(numOfDays[0:i]))
-    #     #         discountList[i] = (1 - ((self.swapDF.loc[i, '스왑금리']/ 100) /365 * sum(numOfDays[0:i]))*sum(discountList[0:i]))/(1+(self.swapDF.loc[i, '스왑금리']/ 100)*numOfDays[i]/365)
-    #
-    #     return discountList
 
 # ★제로금리 구하는 함수
 
@@ -290,10 +289,11 @@ class getNPVforMaturity():
 
     def getForwardRateByContract(self):
 
-        discountList = self.getDiscountByMaturity()
-        swapNumOfDays = self.getNumOfDAYSbetween(self.get_CFdays(self.contractDate, self.contractTenor), 0)
+        discountList = self.getDiscountByContract()
+        swapNumOfDays = self.getNumOfDAYSbetween(self.get_CFdays(self.contractDate, self.contractTenor), 1)
 
-        forwardRateList = [0 for i in range(len)] # ★10월 23일 여기까지 했음
+        forwardRateList = [0 for i in range(len(swapNumOfDays))]
+        # ★10월 23일 여기까지 했음
 
         forwardRateList[0] = self.swapRateForTenor['CD']
 
@@ -301,6 +301,7 @@ class getNPVforMaturity():
             forwardRateList[i] = ((discountList[i-1]/discountList[i])-1) * (365/swapNumOfDays[i])
 
         return forwardRateList
+
 # ★무이표금리 계약별로
 
     def getZeroRateByContract(self):
@@ -339,43 +340,45 @@ class getNPVforMaturity():
         for i in range(0, len(discountByContract), 1):
             discountByContract[i] = 1/(np.exp(zeroRateList[i]*swapNumOfDaysAccumulate[i]/365))
 
-        print(swapNumOfDaysAccumulate)
-
         return discountByContract
 
 # ★변동금리 CF 구하기
 
     def getFloatingRateCF(self):
-        CfDaysList = self.get_CFdays(self.contractDate, self.tenor)
+        CfDaysList = self.get_CFdays(self.contractDate, self.contractTenor)
 
-        CDfixingDate = self.getWeekendMinus(CDFixingDate)
+        numOfDays = self.getNumOfDAYSbetween(self.get_CFdays(self.contractDate, self.tenor),1)
+
+        CDfixingDate = self.getWeekendMinus(CDFixingDate) # CDFixingDate 는 글로벌변수
 
         CDfixingDate = CDfixingDate.strftime("%Y-%m-%d")
 
         CDrateForContract = self.CDrate[CDfixingDate]
 
-        floatingCF
+        floatingCF = [0 for i in range(len(CfDaysList))]
 
-    # def getZeroRateByMaturity(self):
-    #
-    #     numOfDays=self.swapDF['기간'].dt.days#series[i:j]오류떠가지고 list로 바꿔줬음
-    #     discountList=self.getDiscountByMaturity()
-    #
-    #     print(discountList[1])
-    #
-    #     zeroCurveByMaturity=[0 for i in range(self.tenor)]
-    #     for i in range(len(zeroCurveByMaturity)):
-    #         zeroCurveByMaturity[i]=-math.log(discountList[i])*365/numOfDays[i]
-    #
-    #     return zeroCurveByMaturity
+        floatingCF[0] = (CDrateForContract/100)*self.contractNotional*(numOfDays[0]/365) # 첫빠는 CD 금리로 정하기
 
-    # def getFloatingRateCF(self):
-    #
-    #     numOfDays = self.getNumOfDAYSbetween(self.get_CFdays(self.contractDate, self.tenor), 1)
-    #     forwardRateList=self.getForwardRateByMaturity()
-    #
-    #     floatingCF = [0 for i in range(self.contractTenor * 4)]
-    #
-    #     for i in range(self.contractTenor * 4):
-    #         fixedCF[i] = (self.contractSwapRate / 100) * (numOfDays[i] / 365) * self.con
+        forwardList = self.getForwardRateByContract()
 
+        for i in range(1, len(forwardList), 1):
+            floatingCF[i] = self.contractNotional*forwardList[i]*(numOfDays[i]/365)
+
+        return floatingCF
+
+    def getSwapNPV(self):
+        fixedCFList = self.getFixedRateCF()
+        floatingCFList = self.getFloatingRateCF()
+
+        discountList = self.getDiscountByContract()
+
+        npvList = [0 for i in range(len(fixedCFList))]
+
+        for i in range(len(fixedCFList)):
+            npvList[i]=(fixedCFList[i]-floatingCFList[i])*discountList[i]
+
+        if self.direction == -1:
+            return sum(npvList)
+
+        else:
+            return -sum(npvList)
